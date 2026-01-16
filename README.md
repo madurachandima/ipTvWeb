@@ -18,3 +18,5 @@ samples, guidance on mobile development, and a full API reference.
 Web Url
 
 - [Click here to open](https://madurachandima.github.io/ipTvWeb/)
+
+  <base href="$FLUTTER_BASE_HREF">

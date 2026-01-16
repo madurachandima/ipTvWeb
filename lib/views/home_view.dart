@@ -12,127 +12,199 @@ class HomeView extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      body: Stack(
-        children: [
-          // Background Gradient
-          Container(
-            decoration: const BoxDecoration(
-              gradient: LinearGradient(
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-                colors: [
-                  CodeThemes.backgroundColor,
-                  Color(0xFF1E1B4B), // Indigo 950
-                ],
-              ),
-            ),
-          ),
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final isMobile = constraints.maxWidth < 900;
 
-          Row(
+        return Scaffold(
+          extendBodyBehindAppBar: true,
+          appBar: isMobile
+              ? AppBar(
+                  backgroundColor: Colors.transparent,
+                  elevation: 0,
+                  leading: Builder(
+                    builder: (context) {
+                      return IconButton(
+                        icon: const Icon(Icons.menu, color: Colors.white),
+                        onPressed: () => Scaffold.of(context).openDrawer(),
+                      );
+                    },
+                  ),
+                )
+              : null,
+          drawer: isMobile
+              ? Drawer(
+                  backgroundColor: CodeThemes.backgroundColor,
+                  child: Consumer<IPTVProvider>(
+                    builder: (context, provider, child) {
+                      return Sidebar(
+                        width: null,
+                        selectedOption: provider.sidebarOption,
+                        onOptionSelected: (option) {
+                          provider.setSidebarOption(option);
+                          Navigator.pop(context);
+                        },
+                      );
+                    },
+                  ),
+                )
+              : null,
+          body: Stack(
             children: [
-              // Sidebar
-              Consumer<IPTVProvider>(
-                builder: (context, provider, child) {
-                  return Sidebar(
-                    selectedOption: provider.sidebarOption,
-                    onOptionSelected: (option) =>
-                        provider.setSidebarOption(option),
-                  );
-                },
+              // Background Gradient
+              Container(
+                decoration: const BoxDecoration(
+                  gradient: LinearGradient(
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                    colors: [CodeThemes.backgroundColor, Color(0xFF1E1B4B)],
+                  ),
+                ),
               ),
 
-              // Main Content
-              Expanded(
-                child: Consumer<IPTVProvider>(
-                  builder: (context, provider, child) {
-                    if (provider.isLoading) {
-                      return const Center(
-                        child: CircularProgressIndicator(
-                          color: CodeThemes.primaryColor,
-                        ),
-                      );
-                    }
+              Row(
+                children: [
+                  // Sidebar (only on Desktop)
+                  if (!isMobile)
+                    Consumer<IPTVProvider>(
+                      builder: (context, provider, child) {
+                        return Sidebar(
+                          selectedOption: provider.sidebarOption,
+                          onOptionSelected: (option) =>
+                              provider.setSidebarOption(option),
+                        );
+                      },
+                    ),
 
-                    if (provider.error != null) {
-                      return Center(
-                        child: Column(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            const Icon(
-                              Icons.error_outline,
-                              size: 48,
-                              color: Colors.redAccent,
+                  // Main Content
+                  Expanded(
+                    child: Consumer<IPTVProvider>(
+                      builder: (context, provider, child) {
+                        if (provider.isLoading) {
+                          return const Center(
+                            child: CircularProgressIndicator(
+                              color: CodeThemes.primaryColor,
                             ),
-                            const SizedBox(height: 16),
-                            Text('Error: ${provider.error}'),
-                            const SizedBox(height: 16),
-                            ElevatedButton(
-                              onPressed: () => provider.loadData(),
-                              child: const Text('Retry'),
-                            ),
-                          ],
-                        ),
-                      );
-                    }
+                          );
+                        }
 
-                    return CustomScrollView(
-                      slivers: [
-                        const SliverToBoxAdapter(child: ContentHeader()),
-                        SliverPadding(
-                          padding: const EdgeInsets.all(32.0),
-                          sliver: SliverToBoxAdapter(
+                        if (provider.error != null) {
+                          return Center(
                             child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
+                              mainAxisAlignment: MainAxisAlignment.center,
                               children: [
-                                Row(
-                                  children: [
-                                    Text(
-                                      'Live TV Categories',
-                                      style: Theme.of(
-                                        context,
-                                      ).textTheme.titleLarge,
-                                    ),
-                                    const Spacer(),
-                                    _buildSearchBar(context, provider),
-                                  ],
+                                const Icon(
+                                  Icons.error_outline,
+                                  size: 48,
+                                  color: Colors.redAccent,
                                 ),
                                 const SizedBox(height: 16),
-                                _buildCategoryChips(context, provider),
+                                Text('Error: ${provider.error}'),
+                                const SizedBox(height: 16),
+                                ElevatedButton(
+                                  onPressed: () => provider.loadData(),
+                                  child: const Text('Retry'),
+                                ),
                               ],
                             ),
-                          ),
-                        ),
-                        const SliverPadding(
-                          padding: EdgeInsets.symmetric(horizontal: 32.0),
-                          sliver: ChannelGrid(),
-                        ),
-                        const SliverToBoxAdapter(child: SizedBox(height: 50)),
-                      ],
+                          );
+                        }
+
+                        final double horizontalPadding = isMobile ? 16.0 : 32.0;
+
+                        return CustomScrollView(
+                          slivers: [
+                            const SliverToBoxAdapter(child: ContentHeader()),
+                            SliverPadding(
+                              padding: EdgeInsets.all(horizontalPadding),
+                              sliver: SliverToBoxAdapter(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    if (isMobile)
+                                      Column(
+                                        crossAxisAlignment:
+                                            CrossAxisAlignment.start,
+                                        children: [
+                                          Text(
+                                            'Live TV Categories',
+                                            style: Theme.of(
+                                              context,
+                                            ).textTheme.titleLarge,
+                                          ),
+                                          const SizedBox(height: 12),
+                                          _buildSearchBar(
+                                            context,
+                                            provider,
+                                            isMobile,
+                                          ),
+                                        ],
+                                      )
+                                    else
+                                      Row(
+                                        children: [
+                                          Text(
+                                            'Live TV Categories',
+                                            style: Theme.of(
+                                              context,
+                                            ).textTheme.titleLarge,
+                                          ),
+                                          const Spacer(),
+                                          _buildSearchBar(
+                                            context,
+                                            provider,
+                                            isMobile,
+                                          ),
+                                        ],
+                                      ),
+                                    const SizedBox(height: 16),
+                                    _buildCategoryChips(context, provider),
+                                  ],
+                                ),
+                              ),
+                            ),
+                            SliverPadding(
+                              padding: EdgeInsets.symmetric(
+                                horizontal: horizontalPadding,
+                              ),
+                              sliver: const ChannelGrid(),
+                            ),
+                            const SliverToBoxAdapter(
+                              child: SizedBox(height: 50),
+                            ),
+                          ],
+                        );
+                      },
+                    ),
+                  ),
+                ],
+              ),
+
+              // Video Player Overlay
+              Consumer<IPTVProvider>(
+                builder: (context, provider, child) {
+                  if (provider.selectedChannel != null) {
+                    return VideoPlayerOverlay(
+                      channel: provider.selectedChannel!,
                     );
-                  },
-                ),
+                  }
+                  return const SizedBox.shrink();
+                },
               ),
             ],
           ),
-
-          // Video Player Overlay
-          Consumer<IPTVProvider>(
-            builder: (context, provider, child) {
-              if (provider.selectedChannel != null) {
-                return VideoPlayerOverlay(channel: provider.selectedChannel!);
-              }
-              return const SizedBox.shrink();
-            },
-          ),
-        ],
-      ),
+        );
+      },
     );
   }
 
-  Widget _buildSearchBar(BuildContext context, IPTVProvider provider) {
+  Widget _buildSearchBar(
+    BuildContext context,
+    IPTVProvider provider,
+    bool isMobile,
+  ) {
     return Container(
-      width: 300,
+      width: isMobile ? double.infinity : 300,
       height: 45,
       decoration: BoxDecoration(
         color: Colors.white.withValues(alpha: 0.05),

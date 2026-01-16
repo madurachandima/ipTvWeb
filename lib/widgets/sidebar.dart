@@ -5,21 +5,27 @@ import '../theme.dart';
 class Sidebar extends StatelessWidget {
   final String selectedOption;
   final Function(String) onOptionSelected;
+  final double? width;
   const Sidebar({
     super.key,
     required this.selectedOption,
     required this.onOptionSelected,
+    this.width = 280,
   });
 
   @override
   Widget build(BuildContext context) {
     return Container(
-      width: 280,
+      width: width,
       decoration: BoxDecoration(
-        color: Colors.white.withValues(alpha: 0.05),
-        border: Border(
-          right: BorderSide(color: Colors.white.withValues(alpha: 0.1)),
-        ),
+        color: width == null
+            ? Colors.transparent
+            : Colors.white.withValues(alpha: 0.05),
+        border: width == null
+            ? null
+            : Border(
+                right: BorderSide(color: Colors.white.withValues(alpha: 0.1)),
+              ),
       ),
       child: ClipRect(
         child: BackdropFilter(

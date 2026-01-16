@@ -13,6 +13,7 @@ class ChannelGrid extends StatelessWidget {
     return Consumer<IPTVProvider>(
       builder: (context, provider, child) {
         final channels = provider.filteredChannels;
+        final isMobile = MediaQuery.of(context).size.width < 900;
 
         if (channels.isEmpty) {
           return const SliverFillRemaining(
@@ -21,10 +22,10 @@ class ChannelGrid extends StatelessWidget {
         }
 
         return SliverGrid(
-          gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
-            maxCrossAxisExtent: 300,
-            mainAxisSpacing: 24,
-            crossAxisSpacing: 24,
+          gridDelegate: SliverGridDelegateWithMaxCrossAxisExtent(
+            maxCrossAxisExtent: isMobile ? 200 : 300,
+            mainAxisSpacing: isMobile ? 12 : 24,
+            crossAxisSpacing: isMobile ? 12 : 24,
             childAspectRatio: 0.85,
           ),
           delegate: SliverChildBuilderDelegate((context, index) {
