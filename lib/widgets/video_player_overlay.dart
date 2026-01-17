@@ -4,8 +4,10 @@ import 'package:chewie/chewie.dart';
 import 'package:provider/provider.dart';
 import '../models/iptv_models.dart';
 import '../services/iptv_provider.dart';
+import '../services/network_service.dart';
 import '../theme.dart';
 import 'media_kit_player.dart';
+import 'signal_strength_indicator.dart';
 
 class VideoPlayerOverlay extends StatefulWidget {
   final ChannelModel channel;
@@ -22,6 +24,7 @@ class _VideoPlayerOverlayState extends State<VideoPlayerOverlay> {
   bool _initialized = false;
   String? _errorMessage;
   bool _useMediaKit = false;
+  ConnectionQuality? _lastQuality;
 
   @override
   void initState() {
@@ -265,6 +268,10 @@ class _VideoPlayerOverlayState extends State<VideoPlayerOverlay> {
               ],
             ),
           ),
+          const SizedBox(width: 12),
+          const SignalStrengthIndicator(),
+          const SizedBox(width: 8),
+          _buildAdaptiveStatus(),
           const SizedBox(width: 8),
           IconButton(
             onPressed: () {
@@ -380,5 +387,99 @@ class _VideoPlayerOverlayState extends State<VideoPlayerOverlay> {
         ],
       ),
     );
+  }
+
+  Widget _buildAdaptiveStatus() {
+    return Consumer<IPTVProvider>(
+      builder: (context, provider, child) {
+        if (!provider.networkMonitoringEnabled) return const SizedBox.shrink();
+
+        final quality = provider.connectionQuality;
+
+        // Adaptive Logic
+        _handleAdaptiveSwitching(quality);
+
+        return Tooltip(
+          message: 'Adaptive Quality is Active',
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+            decoration: BoxDecoration(
+              color: CodeThemes.primaryColor.withValues(alpha: 0.1),
+              borderRadius: BorderRadius.circular(8),
+              border: Border.all(
+                color: CodeThemes.primaryColor.withValues(alpha: 0.3),
+              ),
+            ),
+            child: const Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(
+                  Icons.auto_awesome,
+                  size: 12,
+                  color: CodeThemes.primaryColor,
+                ),
+                SizedBox(width: 4),
+                Text(
+                  'AUTO',
+                  style: TextStyle(
+                    fontSize: 10,
+                    fontWeight: FontWeight.bold,
+                    color: CodeThemes.primaryColor,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  void _handleAdaptiveSwitching(ConnectionQuality quality) {
+    final provider = context.read<IPTVProvider>();
+    if (!provider.adaptiveQualityEnabled || !provider.networkMonitoringEnabled)
+      return;
+
+    if (quality == _lastQuality) return;
+
+    _lastQuality = quality;
+
+    // Wait 5 seconds of sustained quality change before switching
+    Future.delayed(const Duration(seconds: 5), () {
+      if (!mounted || _lastQuality != quality) return;
+
+      final streams = widget.channel.streams;
+      if (streams.length <= 1) return;
+
+      int targetPriority = 1; // Default
+      if (quality == ConnectionQuality.excellent) targetPriority = 2; // HD
+      if (quality == ConnectionQuality.good) targetPriority = 1; // SD
+      if (quality == ConnectionQuality.fair ||
+          quality == ConnectionQuality.poor)
+        targetPriority = 0; // Low
+
+      // Find the best matching stream for targetPriority
+      int bestIndex = -1;
+      int closestDiff = 100;
+
+      for (int i = 0; i < streams.length; i++) {
+        final diff = (streams[i].priority - targetPriority).abs();
+        if (diff < closestDiff) {
+          closestDiff = diff;
+          bestIndex = i;
+        }
+      }
+
+      if (bestIndex != -1 && bestIndex != _currentStreamIndex) {
+        debugPrint(
+          'Adaptive Switching: Quality is ${quality.name}, moving to Stream $bestIndex (Priority ${streams[bestIndex].priority})',
+        );
+        setState(() {
+          _currentStreamIndex = bestIndex;
+          _initialized = false;
+        });
+        _initializePlayer();
+      }
+    });
   }
 }

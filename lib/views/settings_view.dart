@@ -25,11 +25,29 @@ class SettingsView extends StatelessWidget {
           _buildSection(context, 'Playback', [
             Consumer<IPTVProvider>(
               builder: (context, provider, child) {
-                return _buildSwitchTile(
-                  'Use Media Kit by Default',
-                  'Media Kit is more robust but may use more resources.',
-                  provider.useMediaKitByDefault,
-                  (val) => provider.setUseMediaKitByDefault(val),
+                return Column(
+                  children: [
+                    _buildSwitchTile(
+                      'Use Media Kit by Default',
+                      'Media Kit is more robust but may use more resources.',
+                      provider.useMediaKitByDefault,
+                      (val) => provider.setUseMediaKitByDefault(val),
+                    ),
+                    _buildSwitchTile(
+                      'Signal Strength Check',
+                      'Monitor your connection latency in real-time.',
+                      provider.networkMonitoringEnabled,
+                      (val) => provider.setNetworkMonitoringEnabled(val),
+                    ),
+                    _buildSwitchTile(
+                      'Adaptive Quality Switching',
+                      'Auto-switch streams based on your signal (requires Signal Check).',
+                      provider.adaptiveQualityEnabled,
+                      provider.networkMonitoringEnabled
+                          ? (val) => provider.setAdaptiveQualityEnabled(val)
+                          : null,
+                    ),
+                  ],
                 );
               },
             ),
@@ -121,14 +139,22 @@ class SettingsView extends StatelessWidget {
     String title,
     String subtitle,
     bool value,
-    Function(bool) onChanged,
+    void Function(bool)? onChanged,
   ) {
     return ListTile(
       contentPadding: EdgeInsets.zero,
-      title: Text(title),
+      title: Text(
+        title,
+        style: TextStyle(
+          color: onChanged == null ? Colors.white24 : Colors.white,
+        ),
+      ),
       subtitle: Text(
         subtitle,
-        style: const TextStyle(fontSize: 12, color: Colors.white54),
+        style: TextStyle(
+          fontSize: 12,
+          color: onChanged == null ? Colors.white12 : Colors.white54,
+        ),
       ),
       trailing: Switch(
         value: value,
