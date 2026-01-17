@@ -1,90 +1,106 @@
-import 'dart:convert';
 import 'package:http/http.dart' as http;
 import '../models/iptv_models.dart';
 
 class IPTVService {
-  static const String baseUrl = 'https://iptv-org.github.io/api';
+  static const String categoryIndexUrl =
+      'https://iptv-org.github.io/iptv/index.category.m3u';
+
+  List<ChannelModel>? _cachedChannels;
 
   Future<List<ChannelModel>> fetchChannels() async {
-    final client = http.Client();
+    if (_cachedChannels != null) return _cachedChannels!;
+
     try {
-      final futures = [
-        client
-            .get(Uri.parse('$baseUrl/channels.json'))
-            .timeout(const Duration(seconds: 15)),
-        client
-            .get(Uri.parse('$baseUrl/streams.json'))
-            .timeout(const Duration(seconds: 15)),
-        client
-            .get(Uri.parse('$baseUrl/logos.json'))
-            .timeout(const Duration(seconds: 15)),
-      ];
-
-      final responses = await Future.wait(futures);
-      final channelsResponse = responses[0];
-      final streamsResponse = responses[1];
-      final logosResponse = responses[2];
-
-      if (channelsResponse.statusCode == 200 &&
-          streamsResponse.statusCode == 200 &&
-          logosResponse.statusCode == 200) {
-        final List<dynamic> channelsData = json.decode(channelsResponse.body);
-        final List<dynamic> streamsData = json.decode(streamsResponse.body);
-        final List<dynamic> logosData = json.decode(logosResponse.body);
-
-        final channels = channelsData.map((j) => Channel.fromJson(j)).toList();
-        final streams = streamsData.map((j) => Stream.fromJson(j)).toList();
-        final logos = logosData.map((j) => ChannelLogo.fromJson(j)).toList();
-
-        // Create maps for efficient lookup
-        final streamMap = {for (var s in streams) s.channel: s};
-        final logoMap = {for (var l in logos) l.channel: l};
-
-        // Combine data
-        return channels
-            .where(
-              (c) => streamMap.containsKey(c.id),
-            ) // Only show channels with streams
-            .map(
-              (c) => ChannelModel(
-                channel: c,
-                stream: streamMap[c.id],
-                logo: logoMap[c.id],
-              ),
-            )
-            .toList();
+      final response = await http.get(Uri.parse(categoryIndexUrl));
+      if (response.statusCode == 200) {
+        final content = response.body;
+        _cachedChannels = _parseM3U(content);
+        return _cachedChannels!;
       } else {
-        throw Exception(
-          'Server returned error status. Please check your connection.',
-        );
+        throw Exception('Failed to load IPTV index');
       }
     } catch (e) {
-      if (e is http.ClientException) {
-        throw Exception(
-          'Network error: Please check your internet connection.',
-        );
-      } else if (e is FormatException) {
-        throw Exception(
-          'Data format error: Received invalid response from server.',
-        );
-      }
-      throw Exception('Connection timed out or failed. Please try again.');
-    } finally {
-      client.close();
+      throw Exception('Error fetching IPTV data: $e');
     }
   }
 
-  Future<List<Category>> fetchCategories() async {
-    try {
-      final response = await http.get(Uri.parse('$baseUrl/categories.json'));
-      if (response.statusCode == 200) {
-        final List<dynamic> data = json.decode(response.body);
-        return data.map((j) => Category.fromJson(j)).toList();
-      } else {
-        throw Exception('Failed to load categories');
+  List<ChannelModel> _parseM3U(String content) {
+    final Map<String, ChannelModel> channelMap = {};
+    final Map<String, ChannelModel> nameMap = {};
+    final lines = content.split('\n');
+
+    String? currentName;
+    String? currentLogo;
+    List<String> currentCategories = [];
+    String? currentId;
+
+    for (var i = 0; i < lines.length; i++) {
+      final line = lines[i].trim();
+      if (line.startsWith('#EXTINF:')) {
+        final logoMatch = RegExp(r'tvg-logo="([^"]*)"').firstMatch(line);
+        final groupMatch = RegExp(r'group-title="([^"]*)"').firstMatch(line);
+        final idMatch = RegExp(r'tvg-id="([^"]*)"').firstMatch(line);
+
+        currentLogo = logoMatch?.group(1);
+        final groupTitle = groupMatch?.group(1) ?? 'Other';
+        currentCategories = groupTitle.split(';').map((e) => e.trim()).toList();
+        currentId = idMatch?.group(1);
+
+        final commaIndex = line.lastIndexOf(',');
+        if (commaIndex != -1) {
+          currentName = line.substring(commaIndex + 1).trim();
+        }
+      } else if (line.isNotEmpty && !line.startsWith('#')) {
+        if (currentName != null) {
+          final id = currentId ?? currentName;
+          final normalizedName = currentName.toLowerCase().trim();
+          final stream = Stream(channel: id, url: line);
+
+          // Find existing channel by ID or normalized name
+          final existingChannel = channelMap[id] ?? nameMap[normalizedName];
+
+          if (existingChannel != null) {
+            if (!existingChannel.streams.any((s) => s.url == line)) {
+              existingChannel.streams.add(stream);
+            }
+          } else {
+            final newChannel = ChannelModel(
+              channel: Channel(
+                id: id,
+                name: currentName,
+                categories: currentCategories,
+              ),
+              streams: [stream],
+              logo: currentLogo != null
+                  ? ChannelLogo(channel: id, url: currentLogo)
+                  : null,
+            );
+            channelMap[id] = newChannel;
+            nameMap[normalizedName] = newChannel;
+          }
+        }
+        currentName = null;
+        currentLogo = null;
+        currentCategories = [];
+        currentId = null;
       }
-    } catch (e) {
-      throw Exception('Error fetching categories: $e');
     }
+    return channelMap.values.toSet().toList();
+  }
+
+  Future<List<Category>> fetchCategories() async {
+    final channels = await fetchChannels();
+    final Set<String> categoryNames = {};
+    for (var c in channels) {
+      for (var cat in c.channel.categories) {
+        categoryNames.add(cat);
+      }
+    }
+
+    final List<Category> categories = categoryNames
+        .map((name) => Category(id: name, name: name))
+        .toList();
+    categories.sort((a, b) => a.name.compareTo(b.name));
+    return categories;
   }
 }

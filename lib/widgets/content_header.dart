@@ -3,6 +3,8 @@ import 'package:provider/provider.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import '../theme.dart';
 import '../services/iptv_provider.dart';
+import 'channel_details_sheet.dart';
+import '../models/iptv_models.dart';
 
 class ContentHeader extends StatelessWidget {
   const ContentHeader({super.key});
@@ -97,7 +99,7 @@ class ContentHeader extends StatelessWidget {
                     children: [
                       _buildWatchButton(context, featured),
                       const SizedBox(height: 12),
-                      _buildDetailsButton(),
+                      _buildDetailsButton(context, featured),
                     ],
                   )
                 else
@@ -105,7 +107,7 @@ class ContentHeader extends StatelessWidget {
                     children: [
                       _buildWatchButton(context, featured),
                       const SizedBox(width: 16),
-                      _buildDetailsButton(),
+                      _buildDetailsButton(context, featured),
                     ],
                   ),
               ],
@@ -132,9 +134,16 @@ class ContentHeader extends StatelessWidget {
     );
   }
 
-  Widget _buildDetailsButton() {
+  Widget _buildDetailsButton(BuildContext context, ChannelModel channel) {
     return OutlinedButton.icon(
-      onPressed: () {},
+      onPressed: () {
+        showModalBottomSheet(
+          context: context,
+          isScrollControlled: true,
+          backgroundColor: Colors.transparent,
+          builder: (context) => ChannelDetailsSheet(channel: channel),
+        );
+      },
       icon: const Icon(Icons.info_outline_rounded),
       label: const Text('Channel Details'),
       style: OutlinedButton.styleFrom(

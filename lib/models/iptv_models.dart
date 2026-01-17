@@ -64,8 +64,10 @@ class ChannelLogo {
 
 class ChannelModel {
   final Channel channel;
-  final Stream? stream;
+  final List<Stream> streams;
   final ChannelLogo? logo;
 
-  ChannelModel({required this.channel, this.stream, this.logo});
+  ChannelModel({required this.channel, required this.streams, this.logo});
+
+  Stream? get stream => streams.isNotEmpty ? streams.first : null;
 }

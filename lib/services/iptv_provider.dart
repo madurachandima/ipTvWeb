@@ -6,11 +6,14 @@ import '../services/iptv_service.dart';
 class IPTVProvider with ChangeNotifier {
   final IPTVService _service = IPTVService();
   static const String _favKey = 'favorite_channels';
+  static const String _playerKey = 'default_player';
+  static const String _recentKey = 'recent_channels';
 
   List<ChannelModel> _allChannels = [];
   List<ChannelModel> _filteredChannels = [];
   List<Category> _categories = [];
   Set<String> _favoriteIds = {};
+  List<String> _recentIds = [];
   String _selectedCategory = 'all';
   String _searchQuery = '';
   String _sidebarOption = 'Live TV';
@@ -18,6 +21,7 @@ class IPTVProvider with ChangeNotifier {
   bool _showOnlyFavorites = false;
   ChannelModel? _selectedChannel;
   String? _error;
+  bool _useMediaKitByDefault = false;
 
   List<ChannelModel> get filteredChannels => _filteredChannels;
   List<Category> get categories => _categories;
@@ -27,6 +31,7 @@ class IPTVProvider with ChangeNotifier {
   bool get isLoading => _isLoading;
   bool get showOnlyFavorites => _showOnlyFavorites;
   String? get error => _error;
+  bool get useMediaKitByDefault => _useMediaKitByDefault;
 
   IPTVProvider() {
     loadData();
@@ -34,6 +39,9 @@ class IPTVProvider with ChangeNotifier {
 
   void playChannel(ChannelModel? channel) {
     _selectedChannel = channel;
+    if (channel != null) {
+      _addToRecent(channel.channel.id);
+    }
     notifyListeners();
   }
 
@@ -56,6 +64,36 @@ class IPTVProvider with ChangeNotifier {
     notifyListeners();
   }
 
+  Future<void> setUseMediaKitByDefault(bool value) async {
+    _useMediaKitByDefault = value;
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool(_playerKey, value);
+    notifyListeners();
+  }
+
+  Future<void> clearFavorites() async {
+    _favoriteIds.clear();
+    await _saveFavorites();
+    _applyFilters();
+    notifyListeners();
+  }
+
+  Future<void> clearRecents() async {
+    _recentIds.clear();
+    await _saveRecents();
+    _applyFilters();
+    notifyListeners();
+  }
+
+  void _addToRecent(String id) {
+    _recentIds.remove(id);
+    _recentIds.insert(0, id);
+    if (_recentIds.length > 50) {
+      _recentIds = _recentIds.sublist(0, 50);
+    }
+    _saveRecents();
+  }
+
   Future<void> loadData() async {
     _isLoading = true;
     _error = null;
@@ -63,6 +101,8 @@ class IPTVProvider with ChangeNotifier {
 
     try {
       await _loadFavorites();
+      await _loadSettings();
+      await _loadRecents();
       _allChannels = await _service.fetchChannels();
       _categories = await _service.fetchCategories();
 
@@ -100,6 +140,20 @@ class IPTVProvider with ChangeNotifier {
   }
 
   void _applyFilters() {
+    if (_sidebarOption == 'Recent') {
+      final recentChannels = <ChannelModel>[];
+      for (final id in _recentIds) {
+        try {
+          final channel = _allChannels.firstWhere((c) => c.channel.id == id);
+          recentChannels.add(channel);
+        } catch (_) {
+          // Channel not found in current list, skip
+        }
+      }
+      _filteredChannels = recentChannels;
+      return;
+    }
+
     _filteredChannels = _allChannels.where((c) {
       if (_showOnlyFavorites && !_favoriteIds.contains(c.channel.id)) {
         return false;
@@ -114,6 +168,19 @@ class IPTVProvider with ChangeNotifier {
     }).toList();
   }
 
+  Future<void> _loadRecents() async {
+    final prefs = await SharedPreferences.getInstance();
+    final List<String>? recents = prefs.getStringList(_recentKey);
+    if (recents != null) {
+      _recentIds = recents;
+    }
+  }
+
+  Future<void> _saveRecents() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setStringList(_recentKey, _recentIds);
+  }
+
   Future<void> _loadFavorites() async {
     final prefs = await SharedPreferences.getInstance();
     final List<String>? favs = prefs.getStringList(_favKey);
@@ -125,6 +192,11 @@ class IPTVProvider with ChangeNotifier {
   Future<void> _saveFavorites() async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setStringList(_favKey, _favoriteIds.toList());
+  }
+
+  Future<void> _loadSettings() async {
+    final prefs = await SharedPreferences.getInstance();
+    _useMediaKitByDefault = prefs.getBool(_playerKey) ?? false;
   }
 
   // Helper to get featured channel (limit to 1st for now)

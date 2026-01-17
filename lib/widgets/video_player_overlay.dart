@@ -5,6 +5,7 @@ import 'package:provider/provider.dart';
 import '../models/iptv_models.dart';
 import '../services/iptv_provider.dart';
 import '../theme.dart';
+import 'media_kit_player.dart';
 
 class VideoPlayerOverlay extends StatefulWidget {
   final ChannelModel channel;
@@ -15,33 +16,54 @@ class VideoPlayerOverlay extends StatefulWidget {
 }
 
 class _VideoPlayerOverlayState extends State<VideoPlayerOverlay> {
+  int _currentStreamIndex = 0;
   VideoPlayerController? _videoPlayerController;
   ChewieController? _chewieController;
   bool _initialized = false;
   String? _errorMessage;
+  bool _useMediaKit = false;
 
   @override
   void initState() {
     super.initState();
+    _useMediaKit = context.read<IPTVProvider>().useMediaKitByDefault;
     _initializePlayer();
   }
 
   Future<void> _initializePlayer() async {
-    final url = widget.channel.stream?.url;
-    if (url == null) {
+    if (widget.channel.streams.isEmpty) {
       if (mounted) {
         setState(() {
-          _errorMessage = 'No stream URL available for this channel.';
+          _errorMessage = 'No stream URLs available for this channel.';
         });
       }
       return;
     }
 
+    if (_currentStreamIndex >= widget.channel.streams.length) {
+      if (mounted) {
+        setState(() {
+          _errorMessage =
+              'All available streams failed to load. Please try another channel.';
+        });
+      }
+      return;
+    }
+
+    final url = widget.channel.streams[_currentStreamIndex].url;
+    debugPrint('Trying Stream [$_currentStreamIndex]: $url');
+
     try {
+      // Clean up previous controllers if retrying
+      _chewieController?.dispose();
+      await _videoPlayerController?.dispose();
+      _chewieController = null;
+      _videoPlayerController = null;
+
       final controller = VideoPlayerController.networkUrl(Uri.parse(url));
       _videoPlayerController = controller;
 
-      await controller.initialize();
+      await controller.initialize().timeout(const Duration(seconds: 15));
 
       if (!mounted) return;
 
@@ -52,7 +74,6 @@ class _VideoPlayerOverlayState extends State<VideoPlayerOverlay> {
         aspectRatio: controller.value.aspectRatio,
         allowFullScreen: true,
         isLive: true,
-        // Web fix: Disable seeking for live streams to avoid assertion errors
         allowMuting: true,
         showControls: true,
         placeholder: Container(
@@ -62,13 +83,42 @@ class _VideoPlayerOverlayState extends State<VideoPlayerOverlay> {
           ),
         ),
         errorBuilder: (context, errorMessage) {
+          // If playback fails after initialization, we could also try fallback here
+          // but for now let's just show the error if it was already playing.
           return Center(
             child: Padding(
               padding: const EdgeInsets.all(16.0),
-              child: Text(
-                'Playback Error: $errorMessage',
-                textAlign: TextAlign.center,
-                style: const TextStyle(color: Colors.white),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    'Playback Error: $errorMessage',
+                    textAlign: TextAlign.center,
+                    style: const TextStyle(color: Colors.white),
+                  ),
+                  const SizedBox(height: 12),
+                  if (!_useMediaKit)
+                    ElevatedButton.icon(
+                      onPressed: () {
+                        setState(() {
+                          _useMediaKit = true;
+                          _errorMessage = null;
+                        });
+                      },
+                      icon: const Icon(Icons.bolt_rounded),
+                      label: const Text('Try Media Kit Player'),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Colors.orangeAccent,
+                        foregroundColor: Colors.black,
+                      ),
+                    ),
+                  if (_currentStreamIndex < widget.channel.streams.length - 1)
+                    TextButton.icon(
+                      onPressed: () => _tryNextStream(),
+                      icon: const Icon(Icons.skip_next_rounded),
+                      label: const Text('Try Alternative Stream'),
+                    ),
+                ],
               ),
             ),
           );
@@ -77,14 +127,39 @@ class _VideoPlayerOverlayState extends State<VideoPlayerOverlay> {
 
       setState(() {
         _initialized = true;
+        _errorMessage = null;
       });
     } catch (e) {
+      debugPrint('Stream $_currentStreamIndex failed: $e');
       if (mounted) {
-        setState(() {
-          _errorMessage =
-              'Failed to load stream. The URL might be expired or invalid.';
-        });
+        String errorText = 'Failed to load stream.';
+        bool canTryMediaKit = !_useMediaKit;
+
+        if (e.toString().contains('MEDIA_ERR_SRC_NOT_SUPPORTED')) {
+          errorText =
+              'This stream format is not supported by your browser\'s default player.';
+        }
+
+        if (_currentStreamIndex < widget.channel.streams.length - 1) {
+          _tryNextStream();
+        } else {
+          setState(() {
+            _errorMessage =
+                '$errorText ${canTryMediaKit ? "Try switching to the Media Kit player." : "All alternative URLs exhausted."}';
+          });
+        }
       }
+    }
+  }
+
+  void _tryNextStream() {
+    if (mounted) {
+      setState(() {
+        _currentStreamIndex++;
+        _initialized = false;
+        _errorMessage = null;
+      });
+      _initializePlayer();
     }
   }
 
@@ -190,7 +265,28 @@ class _VideoPlayerOverlayState extends State<VideoPlayerOverlay> {
               ],
             ),
           ),
-          const SizedBox(width: 16),
+          const SizedBox(width: 8),
+          IconButton(
+            onPressed: () {
+              setState(() {
+                _useMediaKit = !_useMediaKit;
+              });
+            },
+            icon: Icon(
+              _useMediaKit
+                  ? Icons.video_library_rounded
+                  : Icons.movie_filter_rounded,
+              size: 24,
+              color: _useMediaKit ? CodeThemes.primaryColor : Colors.white70,
+            ),
+            tooltip: _useMediaKit
+                ? 'Switch to Default Player'
+                : 'Switch to Media Kit',
+            style: IconButton.styleFrom(
+              backgroundColor: Colors.white.withValues(alpha: 0.1),
+            ),
+          ),
+          const SizedBox(width: 8),
           IconButton(
             onPressed: () {
               context.read<IPTVProvider>().playChannel(null);
@@ -253,6 +349,18 @@ class _VideoPlayerOverlayState extends State<VideoPlayerOverlay> {
           ),
         ),
       );
+    }
+
+    if (_useMediaKit) {
+      final currentStream = widget.channel.streams.isNotEmpty
+          ? widget.channel.streams[_currentStreamIndex >=
+                    widget.channel.streams.length
+                ? 0
+                : _currentStreamIndex]
+          : null;
+      if (currentStream != null) {
+        return MediaKitPlayer(videoUrl: currentStream.url);
+      }
     }
 
     if (_initialized && _chewieController != null) {

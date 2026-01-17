@@ -4,6 +4,7 @@ import 'package:cached_network_image/cached_network_image.dart';
 import '../theme.dart';
 import '../services/iptv_provider.dart';
 import '../models/iptv_models.dart';
+import 'channel_details_sheet.dart';
 
 class ChannelGrid extends StatelessWidget {
   const ChannelGrid({super.key});
@@ -141,32 +142,36 @@ class _ChannelCardState extends State<_ChannelCard> {
                       Positioned(
                         top: 8,
                         right: 8,
-                        child: Consumer<IPTVProvider>(
-                          builder: (context, provider, _) {
-                            final isFav = provider.isFavorite(
-                              widget.channel.channel.id,
-                            );
-                            return IconButton(
-                              onPressed: () => provider.toggleFavorite(
-                                widget.channel.channel.id,
-                              ),
-                              icon: Icon(
-                                isFav
-                                    ? Icons.favorite_rounded
-                                    : Icons.favorite_border_rounded,
-                                color: isFav
-                                    ? Colors.redAccent
-                                    : Colors.white70,
-                                size: 20,
-                              ),
-                              style: IconButton.styleFrom(
-                                backgroundColor: Colors.black.withValues(
-                                  alpha: 0.5,
-                                ),
-                                padding: const EdgeInsets.all(4),
-                              ),
-                            );
-                          },
+                        child: Column(
+                          children: [
+                            Consumer<IPTVProvider>(
+                              builder: (context, provider, _) {
+                                final isFav = provider.isFavorite(
+                                  widget.channel.channel.id,
+                                );
+                                return IconButton(
+                                  onPressed: () => provider.toggleFavorite(
+                                    widget.channel.channel.id,
+                                  ),
+                                  icon: Icon(
+                                    isFav
+                                        ? Icons.favorite_rounded
+                                        : Icons.favorite_border_rounded,
+                                    color: isFav
+                                        ? Colors.redAccent
+                                        : Colors.white70,
+                                    size: 20,
+                                  ),
+                                  style: IconButton.styleFrom(
+                                    backgroundColor: Colors.black.withValues(
+                                      alpha: 0.5,
+                                    ),
+                                    padding: const EdgeInsets.all(4),
+                                  ),
+                                );
+                              },
+                            ),
+                          ],
                         ),
                       ),
                       Positioned(
@@ -223,9 +228,25 @@ class _ChannelCardState extends State<_ChannelCard> {
                           ),
                         ),
                         if (_isHovered)
-                          const Icon(
-                            Icons.play_circle_fill_rounded,
-                            color: CodeThemes.primaryColor,
+                          TextButton(
+                            onPressed: () {
+                              showModalBottomSheet(
+                                context: context,
+                                isScrollControlled: true,
+                                backgroundColor: Colors.transparent,
+                                builder: (context) => ChannelDetailsSheet(
+                                  channel: widget.channel,
+                                ),
+                              );
+                            },
+                            child: const Text('DETAILS'),
+                            style: TextButton.styleFrom(
+                              foregroundColor: CodeThemes.primaryColor,
+                              textStyle: const TextStyle(
+                                fontSize: 10,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
                           ),
                       ],
                     ),
