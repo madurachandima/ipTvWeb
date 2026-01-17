@@ -65,27 +65,14 @@ class Sidebar extends StatelessWidget {
       mainAxisAlignment: MainAxisAlignment.center,
       children: [
         Container(
-          padding: const EdgeInsets.all(8),
-          decoration: BoxDecoration(
-            color: CodeThemes.primaryColor,
-            borderRadius: BorderRadius.circular(12),
-            boxShadow: [
-              BoxShadow(
-                color: CodeThemes.primaryColor.withValues(alpha: 0.5),
-                blurRadius: 15,
-                spreadRadius: 2,
-              ),
-            ],
-          ),
-          child: const Icon(
-            Icons.play_arrow_rounded,
-            color: Colors.white,
-            size: 30,
-          ),
+          width: 48,
+          height: 48,
+          decoration: BoxDecoration(borderRadius: BorderRadius.circular(12)),
+          child: Image.asset('assets/images/logo.png', fit: BoxFit.contain),
         ),
         const SizedBox(width: 12),
         const Text(
-          'IPTV Web',
+          'Solixa',
           style: TextStyle(
             fontSize: 24,
             fontWeight: FontWeight.bold,

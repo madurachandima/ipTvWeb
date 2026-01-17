@@ -6,6 +6,7 @@ import '../widgets/channel_grid.dart';
 import '../widgets/content_header.dart';
 import '../services/iptv_provider.dart';
 import '../widgets/video_player_overlay.dart';
+import 'settings_view.dart';
 
 class HomeView extends StatelessWidget {
   const HomeView({super.key});
@@ -111,6 +112,10 @@ class HomeView extends StatelessWidget {
                         }
 
                         final double horizontalPadding = isMobile ? 16.0 : 32.0;
+
+                        if (provider.sidebarOption == 'Settings') {
+                          return const SettingsView();
+                        }
 
                         return CustomScrollView(
                           slivers: [
