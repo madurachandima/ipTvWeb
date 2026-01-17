@@ -2,12 +2,16 @@ import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../models/iptv_models.dart';
 import '../services/iptv_service.dart';
+import '../services/network_service.dart';
 
 class IPTVProvider with ChangeNotifier {
   final IPTVService _service = IPTVService();
+  final NetworkService _networkService = NetworkService();
   static const String _favKey = 'favorite_channels';
   static const String _playerKey = 'default_player';
   static const String _recentKey = 'recent_channels';
+  static const String _adaptiveKey = 'adaptive_quality';
+  static const String _monitorKey = 'network_monitoring';
 
   List<ChannelModel> _allChannels = [];
   List<ChannelModel> _filteredChannels = [];
@@ -22,6 +26,10 @@ class IPTVProvider with ChangeNotifier {
   ChannelModel? _selectedChannel;
   String? _error;
   bool _useMediaKitByDefault = false;
+  bool _adaptiveQualityEnabled = true;
+  bool _networkMonitoringEnabled = true;
+  ConnectionQuality _connectionQuality = ConnectionQuality.excellent;
+  int _currentLatency = 0;
 
   List<ChannelModel> get filteredChannels => _filteredChannels;
   List<Category> get categories => _categories;
@@ -32,9 +40,49 @@ class IPTVProvider with ChangeNotifier {
   bool get showOnlyFavorites => _showOnlyFavorites;
   String? get error => _error;
   bool get useMediaKitByDefault => _useMediaKitByDefault;
+  bool get adaptiveQualityEnabled => _adaptiveQualityEnabled;
+  bool get networkMonitoringEnabled => _networkMonitoringEnabled;
+  ConnectionQuality get connectionQuality => _connectionQuality;
+  int get currentLatency => _currentLatency;
 
   IPTVProvider() {
     loadData();
+    _initNetworkMonitoring();
+  }
+
+  void _initNetworkMonitoring() {
+    _networkService.startMonitoring();
+    _networkService.onQualityChanged.listen((quality) {
+      _connectionQuality = quality;
+      notifyListeners();
+    });
+    _networkService.onLatencyChanged.listen((latency) {
+      _currentLatency = latency;
+      notifyListeners();
+    });
+  }
+
+  Future<void> setAdaptiveQualityEnabled(bool value) async {
+    _adaptiveQualityEnabled = value;
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool(_adaptiveKey, value);
+    notifyListeners();
+  }
+
+  Future<void> setNetworkMonitoringEnabled(bool value) async {
+    _networkMonitoringEnabled = value;
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool(_monitorKey, value);
+
+    if (value) {
+      _networkService.startMonitoring();
+    } else {
+      _networkService.stopMonitoring();
+      _connectionQuality = ConnectionQuality.excellent;
+      _currentLatency = 0;
+    }
+
+    notifyListeners();
   }
 
   void playChannel(ChannelModel? channel) {
@@ -103,6 +151,13 @@ class IPTVProvider with ChangeNotifier {
       await _loadFavorites();
       await _loadSettings();
       await _loadRecents();
+
+      if (_networkMonitoringEnabled) {
+        _networkService.startMonitoring();
+      } else {
+        _networkService.stopMonitoring();
+      }
+
       _allChannels = await _service.fetchChannels();
       _categories = await _service.fetchCategories();
 
@@ -197,9 +252,16 @@ class IPTVProvider with ChangeNotifier {
   Future<void> _loadSettings() async {
     final prefs = await SharedPreferences.getInstance();
     _useMediaKitByDefault = prefs.getBool(_playerKey) ?? false;
+    _adaptiveQualityEnabled = prefs.getBool(_adaptiveKey) ?? true;
+    _networkMonitoringEnabled = prefs.getBool(_monitorKey) ?? true;
   }
 
-  // Helper to get featured channel (limit to 1st for now)
   ChannelModel? get featuredChannel =>
       _allChannels.isNotEmpty ? _allChannels.first : null;
+
+  @override
+  void dispose() {
+    _networkService.dispose();
+    super.dispose();
+  }
 }

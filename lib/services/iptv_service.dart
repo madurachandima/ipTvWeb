@@ -54,7 +54,38 @@ class IPTVService {
         if (currentName != null) {
           final id = currentId ?? currentName;
           final normalizedName = currentName.toLowerCase().trim();
-          final stream = Stream(channel: id, url: line);
+
+          // Detect quality
+          int priority = 1; // Default SD/Medium
+          String? qualityLabel;
+
+          if (normalizedName.contains('4k') || normalizedName.contains('uhd')) {
+            priority = 3;
+            qualityLabel = '4K';
+          } else if (normalizedName.contains('1080p') ||
+              normalizedName.contains('fhd') ||
+              normalizedName.contains('hd')) {
+            priority = 2;
+            qualityLabel = 'HD';
+          } else if (normalizedName.contains('720p')) {
+            priority = 2;
+            qualityLabel = 'HD';
+          } else if (normalizedName.contains('480p') ||
+              normalizedName.contains('sd')) {
+            priority = 1;
+            qualityLabel = 'SD';
+          } else if (normalizedName.contains('360p') ||
+              normalizedName.contains('low')) {
+            priority = 0;
+            qualityLabel = 'Low';
+          }
+
+          final stream = Stream(
+            channel: id,
+            url: line,
+            quality: qualityLabel,
+            priority: priority,
+          );
 
           // Find existing channel by ID or normalized name
           final existingChannel = channelMap[id] ?? nameMap[normalizedName];

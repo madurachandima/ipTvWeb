@@ -28,8 +28,14 @@ class Stream {
   final String channel;
   final String url;
   final String? quality;
+  final int priority; // 0 (Low) to 3 (Ultra)
 
-  Stream({required this.channel, required this.url, this.quality});
+  Stream({
+    required this.channel,
+    required this.url,
+    this.quality,
+    this.priority = 1,
+  });
 
   factory Stream.fromJson(Map<String, dynamic> json) {
     return Stream(
